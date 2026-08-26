@@ -103,6 +103,17 @@ WHERE shift_date >= date_trunc('month', current_date) - interval '1 month'
 GROUP BY zone
 ORDER BY avg_picks_per_hour DESC;
 
+Q: Which employees worked in the frozen zone last month?
+SQL:
+SELECT DISTINCT employee_id
+FROM labor
+WHERE zone = 'FRZ'
+  AND shift_date >= date_trunc('month', current_date) - interval '1 month'
+  AND shift_date < date_trunc('month', current_date);
+-- Note DISTINCT: the question asks "which employees" (one row per
+-- employee), not "which shifts" — a naive query without DISTINCT would
+-- return one row per shift and over-count anyone who worked multiple days.
+
 Q: Which items are expiring in the next 7 days?
 SQL:
 SELECT i.sku, i.description, inv.lot_number, inv.expiry_date, inv.quantity
@@ -129,10 +140,18 @@ Rules:
    or relationship that isn't listed.
 3. If the question cannot be answered with this schema, set answerable=false
    and explain why in `reasoning` instead of guessing or fabricating SQL.
-4. Prefer explicit column lists and clear aliases over `SELECT *`.
-5. Add a reasonable LIMIT for questions that could return many rows, unless
+4. Select ONLY the columns needed to directly answer the question — do not
+   add extra descriptive columns (other attributes, IDs, etc.) the question
+   didn't ask for, even if they seem helpful. If the question asks "which
+   items", return the column(s) that identify an item, not every column on
+   the items table.
+5. "Which X" / "what are the X" about an entity means one row per distinct
+   X, not one row per underlying line-item — use DISTINCT (or GROUP BY)
+   unless the question explicitly asks for line-level detail (e.g. "list
+   each lot", "show every pick").
+6. Add a reasonable LIMIT for questions that could return many rows, unless
    the question is clearly an aggregate that returns few rows.
-6. Report your own confidence (0.0-1.0) in whether the SQL correctly and
+7. Report your own confidence (0.0-1.0) in whether the SQL correctly and
    completely answers the question — not just whether it's syntactically
    valid.
 

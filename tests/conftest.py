@@ -4,8 +4,17 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-# Point Settings at the test DB before any app module reads it.
-os.environ.setdefault("DATABASE_URL", os.environ.get("DATABASE_URL_TEST", ""))
+# Point Settings at the test DB before any app module reads it — but only
+# when DATABASE_URL_TEST is actually set. Never fall through to an empty
+# string: an empty DATABASE_URL env var overrides both the class default
+# and .env's value (pydantic-settings prioritizes process env), which would
+# otherwise silently leave DATABASE_URL resolved to the real seeded dev DB.
+# The db_engine fixture below has its own belt-and-suspenders check for
+# that same failure mode (asserting the DB name ends in `_test`), since
+# table-truncating fixtures pointed at the wrong DB would destroy real data.
+_test_db_url = os.environ.get("DATABASE_URL_TEST")
+if _test_db_url:
+    os.environ["DATABASE_URL"] = _test_db_url
 
 import app.models  # noqa: E402,F401
 from app.core.config import get_settings  # noqa: E402
@@ -26,6 +35,18 @@ def db_engine(settings):
     # migration 0002 is what creates the wms_readonly role and its grants;
     # a create_all-only test DB would silently skip that and let a broken
     # grant pass tests.
+    # Belt-and-suspenders against the "silently wipes the real dev DB"
+    # failure mode: db_session below truncates every table after each test,
+    # so refuse to even connect unless the DB name is unmistakably a test DB.
+    db_name = settings.database_url.rsplit("/", 1)[-1]
+    if not db_name.endswith("_test"):
+        raise RuntimeError(
+            f"DATABASE_URL resolves to {db_name!r}, which doesn't look like a "
+            "test database (expected a name ending in '_test'). Refusing to "
+            "run table-truncating fixtures against it — export DATABASE_URL_TEST "
+            "pointing at a disposable *_test database before running tests."
+        )
+
     engine = create_engine(settings.database_url)
     with engine.connect() as conn:
         has_tables = conn.execute(

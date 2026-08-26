@@ -60,6 +60,13 @@ jobs:
       - name: Run tests with coverage (excludes paid benchmark eval)
         run: pytest -m "not benchmark" --cov=app --cov-report=term-missing --cov-fail-under=75
 
+      # The benchmark needs real seeded data to score against — CI only has
+      # the one Postgres service container, so seed wms_test itself here
+      # rather than standing up a second database just for this job.
+      - name: Seed synthetic data (benchmark only)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark
+        run: python -m scripts.generate_synthetic_data
+
       - name: Run benchmark eval (manual trigger only)
         if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark
         env:

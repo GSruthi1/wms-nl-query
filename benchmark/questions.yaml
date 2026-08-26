@@ -1,0 +1,87 @@
+# WMS NL->SQL benchmark questions.
+#
+# Format per question:
+#   id: unique short id
+#   question: the natural-language question exactly as an ops manager would type it
+#   category: filter | join | aggregation | time_window | jargon | unanswerable
+#   difficulty: easy | medium | hard
+#   gold_sql: the correct SQL (null for `unanswerable` questions — the model
+#             is expected to refuse, not to guess an answer)
+#
+# These 8 are seed examples establishing the format/category spread across
+# every WMS vocabulary term (hot picks, velocity class, slotting,
+# dock-to-stock, cycle count, put-away). The remaining ~42 questions get
+# added here by someone with real WMS floor experience — synthetic
+# questions from an LLM would just test whether the same model can guess
+# its own training-data patterns, not real domain competence.
+
+- id: q001
+  question: Show all items with a chilled temperature class.
+  category: filter
+  difficulty: easy
+  gold_sql: >
+    SELECT sku, description FROM items WHERE temperature_class = 'chilled'
+
+- id: q002
+  question: Which locations currently hold frozen inventory with quantity greater than 100?
+  category: join
+  difficulty: medium
+  gold_sql: >
+    SELECT DISTINCT l.location_code
+    FROM inventory inv
+    JOIN locations l ON inv.location_id = l.id
+    WHERE l.temperature_zone = 'frozen' AND inv.quantity > 100
+
+- id: q003
+  question: What is the total pick quantity by zone?
+  category: aggregation
+  difficulty: medium
+  gold_sql: >
+    SELECT l.zone, SUM(p.quantity) AS total_qty
+    FROM picks p
+    JOIN locations l ON p.location_id = l.id
+    GROUP BY l.zone
+    ORDER BY l.zone
+
+- id: q004
+  question: How many receipts arrived in the last 7 days?
+  category: time_window
+  difficulty: easy
+  gold_sql: >
+    SELECT count(*) FROM receipts WHERE arrival_time >= current_date - interval '7 days'
+
+- id: q005
+  question: What are our top 5 hot picks?
+  category: jargon
+  difficulty: medium
+  gold_sql: >
+    SELECT i.sku, i.description, count(*) AS pick_count
+    FROM picks p JOIN items i ON p.sku = i.sku
+    WHERE i.velocity_class = 'A'
+    GROUP BY i.sku, i.description
+    ORDER BY pick_count DESC
+    LIMIT 5
+
+- id: q006
+  question: What is the average dock-to-stock time in minutes for receipts in the last 30 days?
+  category: jargon
+  difficulty: medium
+  gold_sql: >
+    SELECT round(avg(extract(epoch FROM (put_away_complete_time - arrival_time)) / 60)::numeric, 1)
+      AS avg_dock_to_stock_minutes
+    FROM receipts
+    WHERE put_away_complete_time IS NOT NULL
+      AND arrival_time >= current_date - interval '30 days'
+
+- id: q007
+  question: How many items are in each velocity class?
+  category: aggregation
+  difficulty: easy
+  gold_sql: >
+    SELECT velocity_class, count(*) FROM items GROUP BY velocity_class ORDER BY velocity_class
+
+- id: q008
+  question: What is our cycle count accuracy for the frozen zone?
+  category: unanswerable
+  difficulty: medium
+  gold_sql: null
