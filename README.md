@@ -168,12 +168,17 @@ calls and only runs via manual `workflow_dispatch` in CI.
 
 ## Benchmark results
 
-`benchmark/questions.yaml` holds hand-authored (question, gold SQL)
-pairs — 8 seed questions here establishing the format across every
-category (filter, join, aggregation, time-window, WMS jargon,
-unanswerable); the target dataset is 50, written by someone with real
-cold-chain WMS floor experience, not LLM-generated questions grading an
-LLM's own guesses.
+An 8-question seed benchmark, 100% SQL correctness (8/8) after two
+prompt-gap fixes (see below). `benchmark/questions.yaml` holds
+hand-authored (question, gold SQL) pairs spanning every category (filter,
+join, aggregation, time-window, WMS jargon, unanswerable) — deliberately
+not padded out with LLM-generated questions to hit a round number like 50.
+Eight questions written from real cold-chain WMS floor experience are
+worth more signal than fifty generic ones an LLM invented to grade its own
+guesses. The file accepts more over time as real scenarios come up at
+work (e.g. "which pickers in zone B had below-average picks-per-hour this
+shift", "show me all lots expiring within 14 days in the frozen zone") —
+quality and provenance over hitting a target count.
 
 Scoring executes both the gold SQL and the generated SQL against the same
 seeded database and diffs the **result sets** (column-name- and

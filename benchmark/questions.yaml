@@ -10,10 +10,13 @@
 #
 # These 8 are seed examples establishing the format/category spread across
 # every WMS vocabulary term (hot picks, velocity class, slotting,
-# dock-to-stock, cycle count, put-away). The remaining ~42 questions get
-# added here by someone with real WMS floor experience — synthetic
-# questions from an LLM would just test whether the same model can guess
-# its own training-data patterns, not real domain competence.
+# dock-to-stock, cycle count, put-away). More get added here over time from
+# real cold-chain WMS floor experience — e.g. "which pickers in zone B had
+# below-average picks-per-hour this shift", "show me all lots expiring
+# within 14 days in the frozen zone" — not padded out to a round number
+# with LLM-generated questions, which would just test whether the same
+# model can guess its own training-data patterns, not real domain
+# competence.
 
 - id: q001
   question: Show all items with a chilled temperature class.

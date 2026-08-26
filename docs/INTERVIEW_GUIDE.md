@@ -67,11 +67,12 @@ surfaced two real gaps, not scoring bugs:
 Both were fixed with two explicit prompt rules (don't add unrequested
 columns; "which X" means distinct X unless line-level detail is asked
 for) and one new few-shot example — not by loosening what counts as a
-correct answer. If asked "why only 8 questions, not the full 50" — the
-target 50 are meant to be written by someone with real WMS floor
-experience, and synthetic LLM-generated benchmark questions mostly just
-test whether a model can guess its own training-data patterns, not real
-domain competence.
+correct answer. If asked "why only 8 questions" — that's deliberate, not
+a shortfall: 8 questions written from real cold-chain WMS floor
+experience are worth more than 50 LLM-generated ones, which mostly just
+test whether a model can guess its own training-data patterns rather than
+real domain competence. The file grows over time as real scenarios come
+up at work, not toward a round target count.
 
 ## "Tell me about a bug you debugged"
 
