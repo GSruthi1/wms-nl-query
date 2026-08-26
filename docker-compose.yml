@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: wms
+      POSTGRES_PASSWORD: wms
+      POSTGRES_DB: wms
+    ports:
+      # 5433 on the host, not 5432 — avoids colliding with the LDIP
+      # project's own Postgres container when both are running locally.
+      - "5433:5432"
+    volumes:
+      - wms_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # `depends_on: condition: service_healthy` below waits on this instead
+      # of just "container started" — Postgres accepting TCP connections
+      # happens well before it's ready for queries.
+      test: ["CMD-SHELL", "pg_isready -U wms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      # 8001 on the host — LDIP's app container already holds 8000 locally.
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg2://wms:wms@db:5432/wms
+      DATABASE_URL_READONLY: postgresql+psycopg2://wms_readonly:wms_readonly@db:5432/wms
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_MODEL_ANTHROPIC: ${LLM_MODEL_ANTHROPIC:-claude-sonnet-5}
+      LLM_MODEL_OPENAI: ${LLM_MODEL_OPENAI:-gpt-4o}
+      SQL_STATEMENT_TIMEOUT_MS: ${SQL_STATEMENT_TIMEOUT_MS:-5000}
+      SQL_ROW_LIMIT: ${SQL_ROW_LIMIT:-500}
+      ENVIRONMENT: development
+      LOG_LEVEL: INFO
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["streamlit", "run", "ui/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    ports:
+      - "8501:8501"
+    environment:
+      WMS_API_URL: http://app:8000
+    depends_on:
+      - app
+
+volumes:
+  wms_postgres_data:
