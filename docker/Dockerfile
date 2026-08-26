@@ -19,6 +19,7 @@ COPY alembic ./alembic
 COPY alembic.ini .
 COPY scripts ./scripts
 COPY benchmark ./benchmark
+COPY ui ./ui
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

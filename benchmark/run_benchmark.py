@@ -18,7 +18,7 @@ Usage:
 """
 import argparse
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -147,7 +147,7 @@ def main() -> dict:
 
     summary = summarize(records)
     report = {
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": summary,
         "results": records,
     }

@@ -24,3 +24,7 @@ structlog==24.4.0
 pyyaml==6.0.2
 faker==29.0.0
 pandas==2.2.3
+# UI (ui/streamlit_app.py) ships in the same image as the API — see
+# docker-compose.yml's `ui` service, which builds from this same Dockerfile.
+streamlit==1.38.0
+requests==2.32.3
