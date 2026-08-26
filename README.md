@@ -6,6 +6,11 @@ question about warehouse operations, and the system converts it to SQL,
 safety-validates it, runs it against live WMS data, and explains the result
 in plain English — with every request audited.
 
+**Live**: https://app-production-c12b.up.railway.app (API — `/docs` for
+interactive endpoints, `/health` for a liveness check)
+
+![A query for "What are our top 5 hot picks this month?" showing the generated SQL, a green 90% confidence badge, and a plain-English answer](docs/screenshot.png)
+
 ## Results, up front
 
 - **8/8 (100%)** on the seed benchmark (real Claude Sonnet 5 calls, no
@@ -199,15 +204,33 @@ Reproduce with `docker compose exec app python -m benchmark.run_benchmark`.
 
 ## Deployment
 
-`railway.json` + `docker/Dockerfile` are set up the same way as this
-author's other deployed project (LDIP) — Dockerfile builder, `/health`
-healthcheck, restart-on-failure. Deploy with:
+Live at **https://app-production-c12b.up.railway.app**. `railway.json` +
+`docker/Dockerfile` are set up the same way as this author's other deployed
+project (LDIP) — Dockerfile builder, `/health` healthcheck,
+restart-on-failure (`ON_FAILURE`, max 3 retries). Deploy with:
 
 ```bash
 railway up
 railway domain --port 8000   # required — a Railway healthcheck fails
                               # silently without an explicit target port
 ```
+
+Two notes worth knowing if you hit them elsewhere (the same two as LDIP's
+deploy, so evidently not a one-off):
+
+1. **The healthcheck target port has to match what the container actually
+   binds, explicitly — Railway won't infer it.** This app's `PORT` is
+   pinned to `8000` as a service variable specifically so it matches the
+   `--port 8000` used when creating the domain; Railway's own dynamically
+   assigned port (`8080` here on first deploy, before pinning `PORT`)
+   silently didn't match the domain's target port and every request 502'd
+   with no application-level error anywhere in the logs — the container was
+   healthy the whole time, Railway's router just had nothing correctly
+   wired to reach it.
+2. **`ON_FAILURE` restart policy, `/health` as a real liveness probe, not
+   just a 200-OK stub** — it's checked before traffic routes to a new
+   deployment, which is what makes the pinned-port fix in note 1 visible as
+   a healthcheck failure instead of a silent bad deploy.
 
 ## Key design decisions
 

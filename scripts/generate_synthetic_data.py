@@ -20,9 +20,10 @@ import random
 from datetime import date, datetime, time, timedelta
 
 from faker import Faker
-from sqlalchemy import text
+from sqlalchemy import insert, text
 
 from app.db.session import engine
+from app.models import Inventory, Item, Labor, Location, Pick, Receipt
 
 # --- Curated domain vocabulary -----------------------------------------
 # Real Faker word-salad reads as obviously fake for a food/cold-chain
@@ -285,6 +286,33 @@ def generate_labor(
     return labor
 
 
+def _chunked(rows: list[dict], size: int = 1000):
+    for i in range(0, len(rows), size):
+        yield rows[i : i + size]
+
+
+def _bulk_insert(conn, table, rows: list[dict]) -> None:
+    """Inserts via a Core `Insert()` construct, not raw `text()` SQL.
+
+    This distinction matters a lot over a high-latency connection (e.g.
+    seeding a remote Railway DB through its public proxy instead of
+    locally): SQLAlchemy 2.0's `insertmanyvalues` batching — which packs
+    many rows into one multi-row `INSERT ... VALUES (...), (...), ...`
+    statement — only activates for `Insert()` constructs. The same call
+    written as `conn.execute(text("INSERT ..."), rows)` silently falls
+    back to psycopg2's `executemany()`, which issues one network round
+    trip PER ROW. That difference is why an earlier version of this
+    script took 15+ minutes and then died mid-transaction (connection
+    dropped under a long-held transaction) seeding 20k picks through a
+    public proxy, versus a couple of seconds against a local/low-latency
+    Postgres — the row count didn't change, the round-trip count did.
+    """
+    if not rows:
+        return
+    for chunk in _chunked(rows):
+        conn.execute(insert(table), chunk)
+
+
 def load_into_db(
     locations, items, inventory, picks, receipts, labor, echo: bool = True
 ) -> None:
@@ -296,61 +324,28 @@ def load_into_db(
             )
         )
 
-        conn.execute(
-            text(
-                "INSERT INTO locations (location_code, zone, aisle, bay, level, "
-                "temperature_zone, capacity) VALUES "
-                "(:location_code, :zone, :aisle, :bay, :level, :temperature_zone, :capacity)"
-            ),
-            locations,
-        )
-        conn.execute(
-            text(
-                "INSERT INTO items (sku, description, velocity_class, temperature_class, "
-                "uom, case_pack) VALUES "
-                "(:sku, :description, :velocity_class, :temperature_class, :uom, :case_pack)"
-            ),
-            items,
-        )
+        _bulk_insert(conn, Location.__table__, locations)
+        _bulk_insert(conn, Item.__table__, items)
 
         # inventory/picks reference locations by location_id, not code — resolve via a
         # lookup built from what we just inserted, so we don't have to guess IDs.
         loc_id_by_code = dict(conn.execute(text("SELECT location_code, id FROM locations")).all())
 
-        conn.execute(
-            text(
-                "INSERT INTO inventory (location_id, sku, quantity, lot_number, "
-                "expiry_date, receipt_date) VALUES "
-                "(:location_id, :sku, :quantity, :lot_number, :expiry_date, :receipt_date)"
-            ),
+        _bulk_insert(
+            conn,
+            Inventory.__table__,
             [
                 {**row, "location_id": loc_id_by_code[row.pop("location_code")]}
                 for row in inventory
             ],
         )
-        conn.execute(
-            text(
-                "INSERT INTO picks (sku, quantity, location_id, picker_id, ts, order_id) "
-                "VALUES (:sku, :quantity, :location_id, :picker_id, :ts, :order_id)"
-            ),
+        _bulk_insert(
+            conn,
+            Pick.__table__,
             [{**row, "location_id": loc_id_by_code[row.pop("location_code")]} for row in picks],
         )
-        conn.execute(
-            text(
-                "INSERT INTO receipts (carrier, po_number, arrival_time, "
-                "put_away_complete_time, pallet_count) VALUES "
-                "(:carrier, :po_number, :arrival_time, :put_away_complete_time, :pallet_count)"
-            ),
-            receipts,
-        )
-        conn.execute(
-            text(
-                "INSERT INTO labor (employee_id, shift_date, zone, picks_per_hour, "
-                "dock_to_stock_minutes) VALUES "
-                "(:employee_id, :shift_date, :zone, :picks_per_hour, :dock_to_stock_minutes)"
-            ),
-            labor,
-        )
+        _bulk_insert(conn, Receipt.__table__, receipts)
+        _bulk_insert(conn, Labor.__table__, labor)
 
     if echo:
         print(
